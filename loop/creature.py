@@ -1,70 +1,107 @@
-from random import uniform, randrange, random
+import time
+from random import randrange, random, choice
 
 import pygame
 
+from config.config import Config
 from entity.creature import Creature
 from loop.surface import SurfaceLoop
+from util.time import now
+from util.types import Position, Dimension
 
-color_about_to_die = (200, 200, 225)
-color_alive = (255, 255, 215)
-color_background = (10, 10, 40)
-color_grid = (30, 30, 60)
-die_age = 20
 
 class CreatureLoop:
-    def __init__(self, dimx, dimy, surfaceLoop: SurfaceLoop):
-        self.__dimy = dimy
-        self.__dimx = dimx
-        self.cellsize = 9
+    def __init__(self, dim: Dimension, surfaceLoop: SurfaceLoop):
+        self.__dim = dim
         self.__surfaceLoop = surfaceLoop
+        self.__killed = 0
+        self.__new_born = 0
+        self.__died = 0
+        self.__last_print = now()
         self.creatures = [
-            Creature(randrange(dimx),randrange(dimy)) for _ in range(int(uniform(15, 30.0)))
+            Creature(Position(randrange(dim.x), randrange(dim.y)))
+            for _ in range(Config.creature_count)
         ]
-        
-    def move(self, last_move):
+
+    def move(self, last_move) -> Position:
         movex = randrange(-1, 2)
         movey = randrange(-1, 2)
         if movex == last_move[0] or movey == last_move[1]:
-            return movex, movey
-        return last_move
-    
-    def new_child(self, posx, posy):
-        child = Creature(posx, posy)
+            return Position(movex, movey)
+        return Position(0, 0)
+
+    def new_child(self, pos: Position):
+        child = Creature(pos)
         child.age = 1
         self.creatures.append(child)
-        
+
+    def print_stats(self):
+        if (now() - self.__last_print).total_seconds() > 1:
+            self.__last_print = now()
+            print(len(self.creatures), self.__killed, self.__died, self.__new_born)
+
+    def look_for_food(self, pos: Position):
+        return Position(0, 0)
+
     def loop(self):
+        self.print_stats()
         for creature in self.creatures:
-            posx, posy = creature.get_pos()
-            movex, movey = self.move(creature.get_last_move())
-            new_posx = posx + movex
-            new_posy = posy + movey
-            if new_posx < 0 or new_posx >= self.__dimx:
-                new_posx = posx
-                movex = 0
-            if new_posy < 0 or new_posy >= self.__dimy:
-                new_posy = posy
-                movey = 0
-            new_cell = self.__surfaceLoop.cells[new_posx][new_posy]
-            old_cell = self.__surfaceLoop.cells[posx][posy]
-            
-            if new_cell.is_tree():
-                if not new_cell.chop_wood():
-                    continue
+            move = self.move(creature.get_last_move())
+            pos = creature.get_pos()
+            if creature.is_hungy():
+                move = self.look_for_food(pos)
+
+            if move.x == 0 and move.y == 0:
+                continue
+            new_pos = Position(
+                self.__dim.x - 1 if pos.x + move.x < 0 else pos.x + move.x,
+                self.__dim.y - 1 if pos.y + move.y < 0 else pos.y + move.y,
+            )
+            new_pos = Position(
+                0 if new_pos.x >= self.__dim.x else new_pos.x,
+                0 if new_pos.y >= self.__dim.y else new_pos.y,
+            )
+            move = Position(new_pos.x - pos.x, new_pos.y - pos.y)
+            # get cells
+            new_cell = self.__surfaceLoop.cells[new_pos.x][new_pos.y]
+            old_cell = self.__surfaceLoop.cells[pos.x][pos.y]
+
+            if new_cell.is_tree() and not new_cell.chop_wood():
+                # the new cell is a tree and if we cant chop it down, we cant move
+                continue
+
             old_cell.make_poo()
+
             if new_cell.has_food():
-                if creature.age > 19:
+                if creature.is_hungy():
                     creature.age -= 1
+
+            if creature.age > Config.creature_die_age:
+                # creature is to old and dies
+                self.creatures.remove(creature)
+                self.__died += 1
+                continue
+
             for c in self.creatures:
                 pos = c.get_pos()
-                if new_posx == pos[0] and new_posy == pos[1]:
-                    if c.can_fuck() and creature.can_fuck():
-                        self.new_child(new_posx, new_posy)
-            creature.move(movex, movey)
-            if creature.age > 20:
-                self.creatures.remove(creature)
-            
+                if new_pos.x == pos.x and new_pos.y == pos.y:
+                    # first we will know if they kill each other.
+                    if random() > 0.99:
+                        try:
+                            self.creatures.remove(choice([c, creature]))
+                            self.__killed += 1
+                        except:
+                            pass
+                        break
+                    if c.can_fuck() and creature.can_fuck() and random() > 0.5:
+                        self.new_child(Position(new_pos.x, new_pos.y))
+                        self.__new_born += 1
+                    else:
+                        break
+            creature.move(move.x, move.y)
 
     def draw(self):
         for creature in self.creatures:
-            pygame.draw.rect(self.__surfaceLoop.get_surface(), creature.color(), creature.data())    
+            pygame.draw.rect(
+                self.__surfaceLoop.get_surface(), creature.color(), creature.data()
+            )

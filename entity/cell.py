@@ -1,7 +1,5 @@
-from random import random
-from typing import List, Union
+from typing import List
 
-from entity.creature import Creature
 from entity.food import Food
 from entity.tree import Tree
 
@@ -26,14 +24,14 @@ class Cell:
 
     def is_tree(self):
         return self.__tree.is_alive()
-    
+
     def chop_wood(self):
         self.__tree.die_random(0.99)
         return not self.is_tree()
-    
+
     def make_poo(self):
         self.__tree.plant_random(0.997)
-    
+
     def has_food(self):
         return self.__food.has_food()
 
@@ -43,19 +41,19 @@ class Cell:
         if self.has_food():
             return (200, 140, 100)
         return (250, 235, 220)
-    
+
     def try_plant_tree(self):
         for neightbor in self.__neighbors:
             if neightbor.is_tree():
                 self.__tree.add_extra_factor(0.085)
-        
+
     def tree_loop(self):
         if self._loop_count > 1:
             self.__tree.die_random(0.9999)
             self.__tree.plant_random(0.9999)
             self._loop_count = 0
         self._loop_count += 1
-        
+
     def food_loop(self, food_count):
         if self._loop_count > 1:
             self.__food.grow_food(0.999)
