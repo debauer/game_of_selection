@@ -2,7 +2,6 @@ from random import random
 
 
 class Entity:
-
     def __init__(self):
         self._base_factor: float = random()
         self.__threshold: float = 0.99
@@ -13,6 +12,6 @@ class Entity:
 
     def is_alive(self):
         return self._base_factor > self.__threshold
-    
+
     def factor(self):
         return self._base_factor
